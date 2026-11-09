@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titre %}Gestion du personnel{% endblock %} · MEP</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<header class="entete">
+  <div class="marque">MEP <span>Personnel</span></div>
+  {% set ep = request.endpoint or '' %}
+  <nav>
+    <a href="{{ url_for('personnel.liste') }}" class="{{ 'actif' if ep.startswith('personnel.') and ep != 'personnel.journal' }}">Personnel</a>
+    <a href="{{ url_for('clients.liste') }}" class="{{ 'actif' if ep.startswith('clients.') }}">Clients</a>
+    <a href="{{ url_for('missions.liste') }}" class="{{ 'actif' if ep.startswith('missions.') }}">Missions</a>
+    <a href="{{ url_for('competences.liste') }}" class="{{ 'actif' if ep.startswith('competences.') }}">Compétences</a>
+    <a href="{{ url_for('personnel.journal') }}" class="{{ 'actif' if ep == 'personnel.journal' }}">Journal d'audit</a>
+    <a href="{{ url_for('parametres.index') }}" class="{{ 'actif' if ep.startswith('parametres.') }}">Paramètres</a>
+  </nav>
+  <div class="utilisateur">
+    {{ current_user.nom }}
+    <form method="post" action="{{ url_for('auth.deconnexion') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Déconnexion</button>
+    </form>
+  </div>
+</header>
+{% endif %}
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash flash-{{ cat }}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+  {% block contenu %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

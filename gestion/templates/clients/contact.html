@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Modifier un interlocuteur{% endblock %}
+{% block contenu %}
+<a href="{{ url_for('clients.fiche', code=c.code) }}#contacts" class="muted">← {{ c.raison_sociale }}</a>
+<h1 style="margin:6px 0 18px">Modifier {{ contact.nom_complet }}</h1>
+<form method="post" class="section-form" style="max-width:640px" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="grille-2">
+    {{ champ(form.prenom) }}
+    {{ champ(form.nom, requis=True) }}
+    {{ champ(form.fonction) }}
+    {{ champ(form.role) }}
+    {{ champ(form.email, type="email") }}
+    {{ champ(form.telephone) }}
+  </div>
+  <div class="case-ligne" style="margin-top:14px">
+    <label>{{ form.principal() }} Contact principal</label>
+    <label>{{ form.actif() }} Actif</label>
+  </div>
+  <div class="pied-form" style="margin-top:16px">
+    <a class="btn" href="{{ url_for('clients.fiche', code=c.code) }}#contacts">Annuler</a>
+    <button class="btn btn-primaire" type="submit">Enregistrer</button>
+  </div>
+</form>
+{% endblock %}

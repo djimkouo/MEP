@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block titre %}Clients{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <h1>Référentiel des clients</h1>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('clients.export_csv', **request.args) }}">Exporter (CSV)</a>
+    <a class="btn btn-primaire" href="{{ url_for('clients.nouveau') }}">+ Nouveau client</a>
+  </div>
+</div>
+
+<div class="indicateurs" style="grid-template-columns: repeat(3, 1fr)">
+  <a class="indicateur" href="{{ url_for('clients.liste', statut='actif') }}"><div class="valeur">{{ stats.actif }}</div><div class="libelle">Clients actifs</div></a>
+  <a class="indicateur" href="{{ url_for('clients.liste', statut='prospect') }}"><div class="valeur">{{ stats.prospect }}</div><div class="libelle">Prospects</div></a>
+  <a class="indicateur" href="{{ url_for('clients.liste', statut='inactif') }}"><div class="valeur">{{ stats.inactif }}</div><div class="libelle">Inactifs</div></a>
+</div>
+
+<form class="filtres" method="get">
+  <input type="search" name="q" value="{{ request.args.q or '' }}" placeholder="Raison sociale, sigle, code, ville, RCCM ou interlocuteur…">
+  <select name="statut" onchange="this.form.submit()">
+    <option value="">Prospects et actifs</option>
+    {% for k, v in statuts.items() %}<option value="{{ k }}" {{ 'selected' if request.args.statut == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="secteur" onchange="this.form.submit()">
+    <option value="">Tous secteurs</option>
+    {% for k, v in secteurs.items() %}<option value="{{ k }}" {{ 'selected' if request.args.secteur == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  {% if not request.args.statut %}
+  <label class="case"><input type="checkbox" name="inactifs" value="1" {{ 'checked' if request.args.inactifs }} onchange="this.form.submit()"> Inclure les inactifs</label>
+  {% endif %}
+  <button class="btn" type="submit">Rechercher</button>
+  {% if filtres_actifs %}<a href="{{ url_for('clients.liste') }}" class="muted">Réinitialiser</a>{% endif %}
+</form>
+
+<div class="tableau">
+<table class="donnees">
+  <thead><tr><th>Code</th><th>Client</th><th>Secteur</th><th>Ville</th><th>Interlocuteur principal</th><th>Délai paiement</th><th>Statut</th></tr></thead>
+  <tbody>
+  {% for c in clients %}
+    {% set cp = c.contact_principal %}
+    <tr class="{{ 'archive' if c.statut == 'inactif' }}">
+      <td><span class="code code-client">{{ c.code }}</span></td>
+      <td class="nom-cell"><a href="{{ url_for('clients.fiche', code=c.code) }}"><strong>{{ c.raison_sociale }}</strong></a>{% if c.sigle %}<br><span class="muted">{{ c.sigle }}</span>{% endif %}</td>
+      <td>{{ c.secteur_libelle }}</td>
+      <td>{{ c.ville or '—' }}</td>
+      <td>{% if cp %}{{ cp.nom_complet }}<br><span class="muted">{{ cp.fonction or cp.email or cp.telephone }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ c.delai_paiement }} j</td>
+      <td><span class="badge {{ c.badge_statut }}">{{ c.statut_libelle }}</span></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="vide">
+      {% if filtres_actifs %}Aucun client ne correspond à ces critères.
+      {% else %}Aucun client enregistré. <a href="{{ url_for('clients.nouveau') }}">Enregistrer le premier</a>.{% endif %}
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px">{{ clients|length }} résultat{{ 's' if clients|length > 1 }}</p>
+{% endblock %}

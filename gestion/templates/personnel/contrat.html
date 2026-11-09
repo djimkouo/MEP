@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Contrat de {{ p.nom_complet }}{% endblock %}
+{% block contenu %}
+<a href="{{ url_for('personnel.fiche', code=p.code) }}#contrat" class="muted">← {{ p.nom_complet }}</a>
+<h1 style="margin:6px 0 6px">Renouveler le CDD ou passer en CDI</h1>
+{% set nb, jours = p.cdd_successifs %}
+<p class="muted" style="margin:0 0 18px">CDD en cours : du <strong>{{ p.debut_contrat|date_fr }}</strong> au <strong>{{ p.date_fin_contrat|date_fr }}</strong>
+  · {{ nb }} CDD successif{{ 's' if nb > 1 }}, {{ jours }} jours cumulés. Le contrat en cours sera conservé dans l'historique.
+  Vérifiez les règles de renouvellement et de durée maximale prévues par le code du travail applicable.</p>
+<form method="post" class="section-form" style="max-width:720px" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="grille-2">
+    {{ champ(form.action, requis=True) }}
+    {{ champ(form.date_debut, requis=True) }}
+    <div data-cdd>{{ champ(form.date_fin, requis=True) }}</div>
+    <div data-cdd>{{ champ(form.motif) }}</div>
+    <div data-cdd>{{ champ(form.mission_liee_id) }}</div>
+    {{ champ(form.salaire_mensuel_brut, min=1, step=1, aide="Laisser vide pour conserver le salaire actuel.") }}
+  </div>
+  <div class="pied-form" style="margin-top:16px">
+    <a class="btn" href="{{ url_for('personnel.fiche', code=p.code) }}#contrat">Annuler</a>
+    <button class="btn btn-primaire" type="submit">Enregistrer</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const action = document.getElementById('action');
+  function maj() { document.querySelectorAll('[data-cdd]').forEach(el => el.hidden = action.value !== 'renouveler'); }
+  action.addEventListener('change', maj); maj();
+</script>
+{% endblock %}

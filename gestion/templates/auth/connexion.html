@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Connexion{% endblock %}
+{% block contenu %}
+<div class="connexion">
+  <h1>Gestion du personnel</h1>
+  <div class="muted">Connectez-vous pour continuer.</div>
+  <form method="post" class="carte" novalidate>
+    {{ form.hidden_tag() }}
+    {{ champ(form.email, autocomplete="username", autofocus=true) }}
+    {{ champ(form.mot_de_passe, autocomplete="current-password") }}
+    <button class="btn btn-primaire" type="submit">Se connecter</button>
+  </form>
+</div>
+{% endblock %}

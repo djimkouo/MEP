@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Modifier une compétence{% endblock %}
+{% block contenu %}
+<a href="{{ url_for('competences.liste') }}" class="muted">← Compétences</a>
+<h1 style="margin:6px 0 18px">Modifier « {{ competence.nom }} »</h1>
+<form method="post" class="section-form" style="max-width:520px" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="formulaire">
+    {{ champ(form.nom, requis=True) }}
+    {{ champ(form.categorie) }}
+    <label class="case" style="display:flex;gap:8px;align-items:center">{{ form.actif() }} Active (proposée lors de l'ajout sur une fiche)</label>
+    <div class="pied-form">
+      <a class="btn" href="{{ url_for('competences.liste') }}">Annuler</a>
+      <button class="btn btn-primaire" type="submit">Enregistrer</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

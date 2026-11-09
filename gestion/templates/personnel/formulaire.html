@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ, code %}
+{% block titre %}{{ 'Modifier ' ~ personne.code if personne else 'Nouvelle personne' }}{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <div>
+    <a href="{{ url_for('personnel.fiche', code=personne.code) if personne else url_for('personnel.liste') }}" class="muted">← Retour</a>
+    <h1>{% if personne %}Modifier {{ personne.nom_complet }} {{ code(personne) }}{% else %}Nouvelle personne{% endif %}</h1>
+  </div>
+</div>
+
+<form method="post" class="formulaire" novalidate>
+  {{ form.hidden_tag() }}
+
+  <section class="section-form">
+    <h2>Identification</h2>
+    {% if personne %}
+      <div class="encart">Code <strong class="mono">{{ personne.code }}</strong> <span class="verrou">— attribué par le système, non modifiable. Il est conservé si la catégorie change.</span></div>
+    {% else %}
+      <div class="encart">Le code MEP sera généré à l'enregistrement : <strong>MEP0001 à MEP0100</strong> pour le management, <strong>à partir de MEP0101</strong> pour le reste du personnel.</div>
+    {% endif %}
+    <div class="grille">
+      {{ champ(form.categorie, requis=True) }}
+      {{ champ(form.nom, requis=True) }}
+      {{ champ(form.prenom, requis=True) }}
+      {{ champ(form.email, requis=True, type="email") }}
+      {{ champ(form.telephone, placeholder="+237 6XX XX XX XX") }}
+      {{ champ(form.ville) }}
+      {{ champ(form.date_naissance) }}
+      {{ champ(form.nationalite) }}
+      {{ champ(form.linkedin, placeholder="https://www.linkedin.com/in/…") }}
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Pièce d'identité <span class="badge badge-accent">Numéro chiffré</span></h2>
+    <div class="grille">
+      {{ champ(form.piece_type, requis=True) }}
+      {{ champ(form.piece_numero, requis=True, autocomplete="off") }}
+      {{ champ(form.piece_pays) }}
+      {{ champ(form.piece_date_delivrance) }}
+      {{ champ(form.piece_date_expiration, aide="Une alerte apparaît 60 jours avant l'expiration.") }}
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Contrat de travail</h2>
+    <div class="grille">
+      {{ champ(form.type_contrat, requis=True) }}
+      {{ champ(form.salaire_mensuel_brut, requis=True, min=1, step=1, placeholder="ex. 450000") }}
+      <div></div>
+      {{ champ(form.date_entree, requis=True) }}
+      {{ champ(form.date_sortie) }}
+      <div></div>
+      <div data-cdd>{{ champ(form.date_debut_contrat, aide="Laisser vide si identique à la date d'entrée.") }}</div>
+      <div data-cdd>{{ champ(form.date_fin_contrat, requis=True, aide="Une alerte apparaît 30 jours avant l'échéance.") }}</div>
+      <div data-cdd>{{ champ(form.motif_cdd, placeholder="ex. Chantier de maintenance, surcroît d'activité…") }}</div>
+      <div data-cdd>{{ champ(form.mission_liee_id) }}</div>
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Profil et disponibilité</h2>
+    <div class="grille">
+      {{ champ(form.annees_experience, min=0, max=60) }}
+      {{ champ(form.disponibilite, aide="« En mission » est calculé automatiquement à partir des missions. Utilisez « Indisponible » pour un congé long, le management…") }}
+      {{ champ(form.mobilite) }}
+      {{ champ(form.zones_mobilite, classe="large", placeholder="ex. Douala, Yaoundé, Libreville") }}
+    </div>
+    <p class="muted" style="margin:14px 0 0">Les compétences, certifications et notes s'ajoutent depuis la fiche, une fois la personne enregistrée.</p>
+  </section>
+
+  <div class="pied-form">
+    <a class="btn" href="{{ url_for('personnel.fiche', code=personne.code) if personne else url_for('personnel.liste') }}">Annuler</a>
+    <button class="btn btn-primaire" type="submit">{{ 'Enregistrer les modifications' if personne else 'Enregistrer et générer le code' }}</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Affiche les champs propres au CDD.
+  const typeContrat = document.getElementById('type_contrat');
+  function majContrat() {
+    document.querySelectorAll('[data-cdd]').forEach(el => { el.hidden = typeContrat.value !== 'cdd'; });
+  }
+  typeContrat.addEventListener('change', majContrat);
+  majContrat();
+</script>
+{% endblock %}

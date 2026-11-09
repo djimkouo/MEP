@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Modifier une affectation{% endblock %}
+{% block contenu %}
+<a href="{{ url_for('missions.fiche', code=m.code) }}#affectations" class="muted">← {{ m.code }} · {{ m.intitule }}</a>
+<h1 style="margin:6px 0 6px">{{ a.personne.nom_complet }} sur {{ m.code }}</h1>
+<p class="muted" style="margin:0 0 18px">Mission du {{ m.date_debut|date_fr }} au {{ m.date_fin|date_fr }}. Pour une revalorisation du TJM à partir d'une date, préférez « Prolonger » ou raccourcissez cette période puis ajoutez-en une nouvelle : l'historique des prix restera exact pour la facturation.</p>
+<form method="post" class="section-form" style="max-width:640px" novalidate>
+  {{ form.hidden_tag() }}
+  <input type="hidden" name="personne_id" value="{{ a.personne_id }}">
+  <div class="grille-2">
+    {{ champ(form.date_debut, requis=True, min=m.date_debut.isoformat(), max=m.date_fin.isoformat()) }}
+    {{ champ(form.date_fin, requis=True, min=m.date_debut.isoformat(), max=m.date_fin.isoformat()) }}
+    {% if not m.est_forfait %}{{ champ(form.tjm_vente, requis=True, min=1, step=1) }}{% endif %}
+    {{ champ(form.taux_occupation, requis=True, min=1, max=100) }}
+  </div>
+  {% for e in form.personne_id.errors %}<div class="flash flash-danger" style="margin-top:12px">{{ e }}</div>{% endfor %}
+  <div class="pied-form" style="margin-top:16px">
+    <a class="btn" href="{{ url_for('missions.fiche', code=m.code) }}#affectations">Annuler</a>
+    <button class="btn btn-primaire" type="submit">Enregistrer</button>
+  </div>
+</form>
+{% endblock %}

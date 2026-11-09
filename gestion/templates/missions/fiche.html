@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ, code %}
+{% block titre %}{{ m.code }} · {{ m.intitule }}{% endblock %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% macro classe_marge(taux) %}{{ 'marge-negative' if taux < 0 else ('marge-faible' if taux < 20 else 'marge-ok') }}{% endmacro %}
+{% block contenu %}
+<a href="{{ url_for('missions.liste') }}" class="muted">← Missions</a>
+<div class="fiche-entete" style="margin-top:8px">
+  <div>
+    <h1>{{ m.intitule }}</h1>
+    <div class="meta">
+      <span class="code code-mission">{{ m.code }}</span> ·
+      <a href="{{ url_for('clients.fiche', code=m.client.code) }}">{{ m.client.raison_sociale }}</a>
+      <span class="badge {{ m.badge_statut }}">{{ m.statut_libelle }}</span>
+      <span class="badge badge-gris">{{ m.mode_libelle }}</span>
+      {% if m.alerte_fin == 'depassee' %}<span class="badge badge-rouge">Date de fin dépassée</span>
+      {% elif m.alerte_fin == 'bientot' %}<span class="badge badge-orange">Se termine dans {{ m.jours_restants }} j</span>{% endif %}
+    </div>
+  </div>
+  <div class="actions">
+    {% for statut, libelle in transitions.items() %}
+      <form method="post" action="{{ url_for('missions.changer_statut', code=m.code) }}"
+            {% if statut == 'annulee' %}onsubmit="return confirm('Annuler cette mission ?')"{% endif %}>
+        {{ csrf() }}<input type="hidden" name="statut" value="{{ statut }}">
+        <button class="btn {{ 'btn-danger' if statut == 'annulee' }}" type="submit">{{ libelle }}</button>
+      </form>
+    {% endfor %}
+    {% if m.statut in ('preparation', 'en_cours') %}
+      <a class="btn" href="{{ url_for('missions.prolonger', code=m.code) }}">Prolonger</a>
+    {% endif %}
+    <a class="btn btn-primaire" href="{{ url_for('missions.modifier', code=m.code) }}">Modifier</a>
+  </div>
+</div>
+
+{% if m.alerte_fin == 'depassee' %}
+  <div class="flash flash-danger">La date de fin ({{ m.date_fin|date_fr }}) est passée : clôturez la mission ou prolongez-la.</div>
+{% endif %}
+
+<div class="chiffres">
+  <div class="indicateur"><div class="valeur">{{ m.date_debut|date_fr }} → {{ m.date_fin|date_fr }}</div><div class="libelle">Période de la mission · {{ m.duree_jours }} jours</div></div>
+  <div class="indicateur"><div class="valeur">{{ m.jours_prevus|nombre(1) }} j{% if m.jours_vendus %} <span class="muted" style="font-size:14px">/ {{ m.jours_vendus }} {{ 'budgétés' if m.est_forfait else 'vendus' }}</span>{% endif %}</div><div class="libelle">Jours prévus (jours ouvrés × occupation)</div></div>
+  <div class="indicateur"><div class="valeur">{{ m.ca_previsionnel|xaf }}</div><div class="libelle">{{ 'Montant du forfait' if m.est_forfait else "Chiffre d'affaires prévisionnel" }}</div></div>
+  {% set taux_global = (100 * m.marge_previsionnelle / m.ca_previsionnel) if m.ca_previsionnel else 0 %}
+  <div class="indicateur"><div class="valeur {{ classe_marge(taux_global) if m.ca_previsionnel }}">{{ m.marge_previsionnelle|xaf }}</div><div class="libelle">Marge prévisionnelle{% if m.ca_previsionnel %} ({{ taux_global|nombre(1) }} %){% endif %}</div></div>
+</div>
+{% if m.jours_vendus and m.jours_prevus > m.jours_vendus %}
+  <div class="flash flash-warning">Les jours prévus ({{ m.jours_prevus|nombre(1) }}) dépassent les jours {{ 'budgétés' if m.est_forfait else 'vendus' }} ({{ m.jours_vendus }}).{% if m.est_forfait %} Au forfait, ce dépassement réduit directement votre marge.{% endif %}</div>
+{% endif %}
+{% if m.est_forfait and m.marge_previsionnelle < 0 %}
+  <div class="flash flash-danger">Le coût prévu ({{ m.cout_previsionnel|xaf }}) dépasse le montant du forfait.</div>
+{% endif %}
+
+<section class="carte" id="affectations" style="margin-bottom:16px">
+  <h2>Personnes affectées</h2>
+  {% if m.affectations %}
+  <div class="tableau">
+  <table class="donnees compact">
+    <thead><tr>
+      <th>Personne</th><th>Période</th><th class="num">Occup.</th><th class="num">Jours prévus</th>
+      {% if m.est_forfait %}<th class="num">Coût / jour</th><th class="num">Coût prévu</th>
+      {% else %}<th class="num">TJM vente</th><th class="num">Coût / jour</th><th class="num">Marge / jour</th>{% endif %}<th></th>
+    </tr></thead>
+    <tbody>
+    {% for a in m.affectations %}
+      <tr class="{{ 'periode-suite' if a.prolongation_de }}">
+        <td>{% if a.prolongation_de %}<span class="muted">↳ prolongation</span>{% else %}
+          {{ code(a.personne) }} <a href="{{ url_for('personnel.fiche', code=a.personne.code) }}">{{ a.personne.nom_complet }}</a>
+          <br><span class="muted" style="font-size:12px">{{ a.personne.contrat_libelle }}</span>{% if a.personne.salaire_manquant %} <span class="badge badge-orange">Salaire non renseigné</span>{% endif %}{% endif %}
+        </td>
+        <td style="white-space:nowrap">{{ a.date_debut|date_fr }} → {{ a.date_fin|date_fr }}{% if a.est_courante %} <span class="badge badge-vert">En cours</span>{% endif %}
+          {% if a.depasse_contrat %}<br><span class="badge badge-orange" title="Fin du CDD : {{ a.personne.date_fin_contrat|date_fr }}">Au-delà du CDD ({{ a.personne.date_fin_contrat|date_fr }})</span>{% endif %}</td>
+        <td class="num">{{ a.taux_occupation }} %</td>
+        <td class="num">{{ a.jours_prevus|nombre(1) }}</td>
+        {% if m.est_forfait %}
+        <td class="num" title="Salaire mensuel brut ÷ {{ jours_mois }} jours ouvrés">{{ a.cout_journalier|xaf }}</td>
+        <td class="num">{{ a.cout_previsionnel|round|int|xaf }}</td>
+        {% else %}
+        <td class="num">{{ a.tjm_vente|xaf }}</td>
+        <td class="num" title="Salaire mensuel brut ÷ {{ jours_mois }} jours ouvrés">{{ a.cout_journalier|xaf }}</td>
+        <td class="num"><span class="{{ classe_marge(a.taux_marge) }}">{{ a.marge_journaliere|xaf }}</span><br><span class="muted" style="font-size:12px">{{ a.taux_marge|nombre(1) }} %</span></td>
+        {% endif %}
+        <td class="num">
+          {% if m.statut in ('preparation', 'en_cours') %}
+          <a class="btn btn-petit" href="{{ url_for('missions.modifier_affectation', code=m.code, aid=a.id) }}">Modifier</a>
+          {% endif %}
+          {% if m.statut == 'preparation' %}
+          <form method="post" action="{{ url_for('missions.supprimer_affectation', code=m.code, aid=a.id) }}" style="display:inline" onsubmit="return confirm('Retirer cette personne de la mission ?')">{{ csrf() }}<button class="btn-lien" title="Retirer">✕</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="font-size:12px;margin:8px 0 0">{% if m.est_forfait %}Au forfait, le prix est porté par la mission : marge = montant du forfait − coût prévu. {% endif %}Coût d'une personne : salaire mensuel brut ÷ {{ jours_mois|nombre(2) }} jours ouvrés (modifiable dans <a href="{{ url_for('parametres.index') }}">Paramètres</a>). Jours fériés non déduits.</p>
+  {% else %}
+    <p class="muted">Personne n'est encore affecté à cette mission.</p>
+  {% endif %}
+
+  {% if m.statut in ('preparation', 'en_cours') %}
+  <form class="form-affectation" method="post" action="{{ url_for('missions.ajouter_affectation', code=m.code) }}" novalidate>
+    {{ form.hidden_tag() }}
+    {{ champ(form.personne_id) }}
+    {{ champ(form.date_debut, min=m.date_debut.isoformat(), max=m.date_fin.isoformat()) }}
+    {{ champ(form.date_fin, min=m.date_debut.isoformat(), max=m.date_fin.isoformat()) }}
+    {% if m.est_forfait %}<div class="champ"><label>TJM de vente</label><input disabled value="Sans objet (forfait)"></div>
+    {% else %}{{ champ(form.tjm_vente, min=1, step=1, placeholder="ex. 250000") }}{% endif %}
+    {{ champ(form.taux_occupation, min=1, max=100) }}
+    <button class="btn btn-primaire" type="submit">Affecter</button>
+  </form>
+  {% if m.competences %}<p class="muted" style="font-size:12px;margin:6px 0 0">Liste triée : d'abord les personnes ayant le plus de compétences recherchées, puis les plus libres sur la période.</p>{% endif %}
+  {% endif %}
+</section>
+
+{% if m.est_forfait %}
+<section class="carte" id="jalons" style="margin-bottom:16px">
+  <h2 style="display:flex;justify-content:space-between;align-items:center">
+    <span>Jalons de facturation</span>
+    <span class="muted" style="font-weight:400;font-size:13px">{{ m.total_jalons|xaf }} planifiés sur {{ m.montant_forfait|xaf }}
+      {% if m.reste_a_planifier > 0 %}· <span class="marge-faible">{{ m.reste_a_planifier|xaf }} restent à planifier</span>
+      {% elif m.reste_a_planifier < 0 %}· <span class="marge-negative">dépassement de {{ (-m.reste_a_planifier)|xaf }}</span>
+      {% else %}· <span class="marge-ok">100 % planifié</span>{% endif %}</span>
+  </h2>
+  {% if m.jalons %}
+  <div class="tableau">
+  <table class="donnees compact">
+    <thead><tr><th>Jalon</th><th>Date prévue</th><th class="num">Montant</th><th class="num">%</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+    {% for j in m.jalons %}
+      <tr>
+        <td><strong>{{ j.libelle }}</strong></td>
+        <td>{{ j.date_prevue|date_fr }}{% if j.en_retard %} <span class="badge badge-orange">En retard</span>{% endif %}</td>
+        <td class="num">{{ j.montant|xaf }}</td>
+        <td class="num">{{ j.pourcentage|nombre(1) }} %</td>
+        <td><span class="badge {{ {'prevu':'badge-accent','atteint':'badge-vert','facture':'badge-gris'}[j.statut] }}">{{ j.statut_libelle }}</span>
+          {% if j.date_atteint %}<span class="muted" style="font-size:12px"> le {{ j.date_atteint|date_fr }}</span>{% endif %}</td>
+        <td class="num">
+          {% if j.statut == 'prevu' %}
+            <form method="post" action="{{ url_for('missions.statut_jalon', code=m.code, jid=j.id) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="statut" value="atteint"><button class="btn btn-petit" type="submit">Marquer atteint</button></form>
+            <form method="post" action="{{ url_for('missions.supprimer_jalon', code=m.code, jid=j.id) }}" style="display:inline" onsubmit="return confirm('Supprimer ce jalon ?')">{{ csrf() }}<button class="btn-lien" title="Supprimer">✕</button></form>
+          {% elif j.statut == 'atteint' %}
+            <form method="post" action="{{ url_for('missions.statut_jalon', code=m.code, jid=j.id) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="statut" value="prevu"><button class="btn btn-petit" type="submit">Annuler « atteint »</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">Aucun jalon. Exemple : 30 % à la commande, 40 % à la livraison, 30 % à la réception.</p>{% endif %}
+  {% if m.statut in ('preparation', 'en_cours') %}
+  <form class="form-affectation" style="grid-template-columns: 2.4fr 1fr 1fr 1fr auto" method="post" action="{{ url_for('missions.ajouter_jalon', code=m.code) }}" novalidate>
+    {{ jalon_form.hidden_tag() }}
+    {{ champ(jalon_form.libelle, placeholder="ex. Acompte à la commande") }}
+    {{ champ(jalon_form.montant, min=1, step=1) }}
+    {{ champ(jalon_form.pourcentage, min=0.01, max=100, step="0.01") }}
+    {{ champ(jalon_form.date_prevue) }}
+    <button class="btn btn-primaire" type="submit">Ajouter</button>
+  </form>
+  <p class="muted" style="font-size:12px;margin:6px 0 0">Un jalon « atteint » sera proposé à la facturation (module 5), qui le passera en « facturé ».</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="colonnes">
+  <div class="colonne">
+    <section class="carte">
+      <h2>Détails</h2>
+      <dl class="infos">
+        <dt>Client</dt><dd><a href="{{ url_for('clients.fiche', code=m.client.code) }}">{{ m.client.raison_sociale }}</a> <span class="badge {{ m.client.badge_statut }}">{{ m.client.statut_libelle }}</span></dd>
+        <dt>Interlocuteur</dt><dd>{% if m.contact %}{{ m.contact.nom_complet }}{% if m.contact.fonction %} <span class="muted">· {{ m.contact.fonction }}</span>{% endif %}{% if m.contact.email %}<br><a href="mailto:{{ m.contact.email }}">{{ m.contact.email }}</a>{% endif %}{% else %}—{% endif %}</dd>
+        <dt>Facturation</dt><dd>{{ m.mode_libelle }}{% if m.est_forfait %} · {{ m.montant_forfait|xaf }}{% endif %}</dd>
+        {% if m.est_forfait %}<dt>Livrable</dt><dd style="white-space:pre-wrap">{{ m.livrable }}</dd>{% endif %}
+        <dt>Référence commande</dt><dd>{{ m.reference_commande or '—' }}</dd>
+        <dt>Lieu</dt><dd>{{ m.lieu or '—' }}</dd>
+        <dt>Mode de travail</dt><dd>{{ mobilites.get(m.mode, '—') }}</dd>
+        <dt>{{ 'Budget en jours' if m.est_forfait else 'Jours vendus' }}</dt><dd>{{ m.jours_vendus or '—' }}</dd>
+        <dt>Compétences recherchées</dt><dd>{% for c in m.competences %}<span class="tag">{{ c.nom }}</span>{% else %}—{% endfor %}</dd>
+      </dl>
+      {% if m.description %}<p style="white-space:pre-wrap;margin:14px 0 0">{{ m.description }}</p>{% endif %}
+    </section>
+  </div>
+  <div class="colonne">
+    <section class="carte">
+      <h2>Historique</h2>
+      <ul class="liste-simple historique">
+      {% for e in historique %}
+        <li><strong>{{ actions.get(e.action, e.action) }}</strong> <span class="muted">· {{ e.horodatage|date_fr }} UTC · {{ e.utilisateur.nom if e.utilisateur else '—' }}</span>
+          {% if e.details %}<div class="details">{{ e.details }}</div>{% endif %}</li>
+      {% else %}<li class="muted">Aucun événement.</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+</div>
+{% endblock %}

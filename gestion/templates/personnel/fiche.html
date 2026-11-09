@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% from "_macros.html" import niveau, code %}
+{% block titre %}{{ p.code }} · {{ p.nom_complet }}{% endblock %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% block contenu %}
+<a href="{{ url_for('personnel.liste') }}" class="muted">← Personnel</a>
+{% set badge = p.badge_disponibilite %}
+<div class="fiche-entete" style="margin-top:8px">
+  <div class="avatar">{{ p.prenom[:1]|upper }}{{ p.nom[:1]|upper }}</div>
+  <div>
+    <h1>{{ p.nom_complet }}</h1>
+    <div class="meta">
+      {{ code(p) }} · {{ p.categorie_libelle }} · {{ p.contrat_libelle }}
+      <span class="badge {{ badge[1] }}">{{ badge[0] }}</span>
+    </div>
+  </div>
+  <div class="actions">
+    <form method="post" action="{{ url_for('personnel.archiver', code=p.code) }}"
+          onsubmit="return confirm('{{ 'Réactiver' if p.archive else 'Archiver' }} cette personne ?')">
+      {{ csrf() }}
+      <button class="btn {{ '' if p.archive else 'btn-danger' }}" type="submit">{{ 'Réactiver' if p.archive else 'Archiver' }}</button>
+    </form>
+    <a class="btn btn-primaire" href="{{ url_for('personnel.modifier', code=p.code) }}">Modifier</a>
+  </div>
+</div>
+
+{% if p.salaire_manquant %}
+  <div class="flash flash-warning">Le salaire mensuel brut n'est pas renseigné : le coût de cette personne sur les missions est compté à 0. <a href="{{ url_for('personnel.modifier', code=p.code) }}">Compléter la fiche</a></div>
+{% endif %}
+{% if p.etat_contrat == 'echu' %}
+  <div class="flash flash-danger">Le CDD est arrivé à échéance le {{ p.date_fin_contrat|date_fr }} sans renouvellement. <a href="{{ url_for('personnel.contrat', code=p.code) }}">Renouveler ou passer en CDI</a></div>
+{% elif p.etat_contrat == 'bientot' %}
+  <div class="flash flash-warning">Le CDD se termine le {{ p.date_fin_contrat|date_fr }}. <a href="{{ url_for('personnel.contrat', code=p.code) }}">Renouveler ou passer en CDI</a></div>
+{% endif %}
+{% for a in p.affectations if a.depasse_contrat and a.mission.statut in ('preparation', 'en_cours') %}
+  <div class="flash flash-warning">L'affectation sur {{ a.mission.code }} va jusqu'au {{ a.date_fin|date_fr }}, après la fin du CDD ({{ p.date_fin_contrat|date_fr }}).</div>
+{% endfor %}
+{% if p.etat_piece == 'expiree' %}
+  <div class="flash flash-danger">La pièce d'identité a expiré le {{ p.piece_date_expiration|date_fr }}.</div>
+{% elif p.etat_piece == 'bientot' %}
+  <div class="flash flash-warning">La pièce d'identité expire le {{ p.piece_date_expiration|date_fr }}.</div>
+{% endif %}
+
+<div class="colonnes">
+  <div class="colonne">
+    <section class="carte">
+      <h2>Identification</h2>
+      <dl class="infos">
+        <dt>E-mail</dt><dd><a href="mailto:{{ p.email }}">{{ p.email }}</a></dd>
+        <dt>Téléphone</dt><dd>{{ p.telephone or '—' }}</dd>
+        <dt>Ville</dt><dd>{{ p.ville or '—' }}</dd>
+        <dt>Date de naissance</dt><dd>{{ p.date_naissance|date_fr }}</dd>
+        <dt>Nationalité</dt><dd>{{ p.nationalite or '—' }}</dd>
+        <dt>LinkedIn</dt><dd>{% if p.linkedin %}<a href="{{ p.linkedin }}" target="_blank" rel="noopener">Voir le profil</a>{% else %}—{% endif %}</dd>
+      </dl>
+    </section>
+
+    <section class="carte" id="contrat">
+      <h2 style="display:flex;justify-content:space-between;align-items:center"><span>Contrat et pièce d'identité</span>
+        {% if p.est_cdd %}<a class="btn btn-petit" href="{{ url_for('personnel.contrat', code=p.code) }}">Renouveler / passer en CDI</a>{% endif %}</h2>
+      <dl class="infos">
+        <dt>Contrat</dt><dd><strong>{{ p.contrat_libelle }}</strong></dd>
+        {% if p.est_cdd %}
+        {% set nb, jours = p.cdd_successifs %}
+        <dt>CDD en cours</dt><dd>du {{ p.debut_contrat|date_fr }} au {{ p.date_fin_contrat|date_fr }}
+          {% if p.etat_contrat == 'echu' %}<span class="badge badge-rouge">Échu</span>{% elif p.etat_contrat == 'bientot' %}<span class="badge badge-orange">Échéance proche</span>{% endif %}</dd>
+        <dt>Motif</dt><dd>{{ p.motif_cdd or '—' }}</dd>
+        <dt>Mission liée</dt><dd>{% if p.mission_liee %}<a href="{{ url_for('missions.fiche', code=p.mission_liee.code) }}">{{ p.mission_liee.code }}</a> · {{ p.mission_liee.intitule }}{% else %}—{% endif %}</dd>
+        <dt>CDD successifs</dt><dd>{{ nb }} · {{ jours }} jours cumulés ({{ (jours / 30.44)|nombre(1) }} mois)</dd>
+        {% else %}
+        <dt>Début du contrat</dt><dd>{{ p.debut_contrat|date_fr }}</dd>
+        {% endif %}
+        <dt>Date d'entrée</dt><dd>{{ p.date_entree|date_fr }}</dd>
+        <dt>Date de sortie</dt><dd>{{ p.date_sortie|date_fr }}</dd>
+        <dt>Pièce</dt><dd>{{ p.piece_type_libelle }}{% if p.piece_pays %} ({{ p.piece_pays }}){% endif %}</dd>
+        <dt>Délivrée le</dt><dd>{{ p.piece_date_delivrance|date_fr }}</dd>
+        <dt>Expire le</dt><dd>{{ p.piece_date_expiration|date_fr }}</dd>
+      </dl>
+      {% if p.contrats_precedents %}
+      <h2 style="margin:16px 0 6px;font-size:13px">Contrats précédents</h2>
+      <ul class="liste-simple">
+        {% for c in p.contrats_precedents %}
+        <li><span><strong>{{ c.type_libelle }}</strong> du {{ c.date_debut|date_fr }} au {{ c.date_fin|date_fr }}
+          {% if c.motif %}<span class="muted">· {{ c.motif }}</span>{% endif %}
+          {% if c.mission %}<span class="muted">· {{ c.mission.code }}</span>{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div class="sensible">
+        <div class="sensible-titre">
+          <span>Données sensibles</span>
+          {% if sensible %}<a href="{{ url_for('personnel.fiche', code=p.code) }}">Masquer</a>
+          {% else %}<a href="{{ url_for('personnel.fiche_sensible', code=p.code) }}">Afficher</a>{% endif %}
+        </div>
+        <dl class="infos">
+          <dt>N° de pièce</dt><dd class="mono">{{ p.piece_numero if sensible else p.piece_numero_masque }}</dd>
+          <dt>Salaire mensuel brut</dt><dd>{{ (p.salaire_mensuel_brut|xaf if p.salaire_mensuel_brut else 'non renseigné') if sensible else '•••••• XAF' }}</dd>
+        </dl>
+        {% if sensible %}<div class="muted" style="font-size:12px;margin-top:6px">Cette consultation a été enregistrée dans le journal d'audit.</div>{% endif %}
+      </div>
+    </section>
+
+    <section class="carte" id="notes">
+      <h2>Notes internes</h2>
+      <form method="post" action="{{ url_for('personnel.ajouter_note', code=p.code) }}">
+        {{ note_form.hidden_tag() }}
+        {{ note_form.texte(class="champ", style="width:100%;padding:8px 10px;border:1px solid #d3d8df;border-radius:6px;font:inherit", placeholder="Entretien, retour client, souhait d'évolution…") }}
+        <div style="text-align:right;margin-top:8px"><button class="btn" type="submit">Ajouter la note</button></div>
+      </form>
+      {% for n in p.notes %}
+        <div class="note"><div class="qui">{{ n.cree_le|date_fr }} · {{ n.auteur.nom if n.auteur else '—' }}</div><p>{{ n.texte }}</p></div>
+      {% else %}<p class="muted">Aucune note.</p>{% endfor %}
+    </section>
+  </div>
+
+  <div class="colonne">
+    <section class="carte">
+      <h2>Disponibilité</h2>
+      <dl class="infos">
+        <dt>État</dt><dd><span class="badge {{ badge[1] }}">{{ badge[0] }}</span></dd>
+        {% if p.affectation_courante %}
+        <dt>Mission actuelle</dt><dd><a href="{{ url_for('missions.fiche', code=p.affectation_courante.mission.code) }}">{{ p.affectation_courante.mission.code }}</a> · {{ p.affectation_courante.mission.client.raison_sociale }}</dd>
+        <dt>Libre le</dt><dd>{{ p.libre_le|date_fr }}</dd>
+        {% endif %}
+        <dt>Mode de travail</dt><dd>{{ {'sur_site':'Sur site','teletravail':'Télétravail','hybride':'Hybride'}.get(p.mobilite, '—') }}</dd>
+        <dt>Zones acceptées</dt><dd>{{ p.zones_mobilite or '—' }}</dd>
+        <dt>Expérience</dt><dd>{{ (p.annees_experience ~ ' an' ~ ('s' if p.annees_experience > 1 else '')) if p.annees_experience is not none else '—' }}</dd>
+      </dl>
+    </section>
+
+    <section class="carte" id="missions">
+      <h2>Missions <span class="muted">({{ p.affectations|length }})</span></h2>
+      <ul class="liste-simple">
+      {% for a in p.affectations %}
+        <li>
+          <span><a class="code code-mission" href="{{ url_for('missions.fiche', code=a.mission.code) }}">{{ a.mission.code }}</a>
+            <strong>{{ a.mission.intitule }}</strong> <span class="muted">· {{ a.mission.client.raison_sociale }}</span><br>
+            <span class="muted">{{ a.date_debut|date_fr }} → {{ a.date_fin|date_fr }}{% if a.taux_occupation < 100 %} · {{ a.taux_occupation }} %{% endif %}</span></span>
+          <span class="badge {{ 'badge-vert' if a.est_courante else a.mission.badge_statut }}">{{ 'En cours' if a.est_courante else a.mission.statut_libelle }}</span>
+        </li>
+      {% else %}<li class="muted">Aucune mission.</li>{% endfor %}
+      </ul>
+    </section>
+
+    <section class="carte" id="competences">
+      <h2>Compétences</h2>
+      <ul class="liste-simple">
+      {% for pc in p.competences|sort(attribute='niveau', reverse=true) %}
+        <li>
+          <span>{{ niveau(pc.niveau) }}<strong>{{ pc.competence.nom }}</strong>
+            <span class="muted">· {{ pc.niveau_libelle }}{% if pc.annees %} · {{ pc.annees }} an{{ 's' if pc.annees > 1 }}{% endif %}</span></span>
+          <form method="post" action="{{ url_for('personnel.retirer_competence', code=p.code, pcid=pc.id) }}">{{ csrf() }}<button class="btn-lien" title="Retirer">✕</button></form>
+        </li>
+      {% else %}<li class="muted">Aucune compétence renseignée.</li>{% endfor %}
+      </ul>
+      {% if competences_dispo %}
+      <form class="form-ligne" method="post" action="{{ url_for('personnel.ajouter_competence', code=p.code) }}">
+        {{ csrf() }}
+        <select name="competence_id" required style="flex:2 1 160px">
+          <option value="">Compétence…</option>
+          {% for c in competences_dispo %}<option value="{{ c.id }}">{{ c.nom }}</option>{% endfor %}
+        </select>
+        <select name="niveau" required>
+          {% for n, lib in niveaux.items() %}<option value="{{ n }}" {{ 'selected' if n == 2 }}>{{ n }} – {{ lib }}</option>{% endfor %}
+        </select>
+        <input type="number" name="annees" min="0" max="60" placeholder="Années">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+      {% endif %}
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Liste gérée dans <a href="{{ url_for('competences.liste') }}">Compétences</a>.</p>
+    </section>
+
+    <section class="carte" id="certifications">
+      <h2>Certifications</h2>
+      <ul class="liste-simple">
+      {% for c in p.certifications %}
+        <li>
+          <span><strong>{{ c.nom }}</strong>{% if c.organisme %} <span class="muted">· {{ c.organisme }}</span>{% endif %}<br>
+            <span class="muted">Obtenue le {{ c.date_obtention|date_fr }}{% if c.date_expiration %} · expire le {{ c.date_expiration|date_fr }}{% endif %}</span>
+            {% if c.expiree %}<span class="badge badge-rouge">Expirée</span>{% endif %}</span>
+          <form method="post" action="{{ url_for('personnel.retirer_certification', code=p.code, cid=c.id) }}">{{ csrf() }}<button class="btn-lien" title="Retirer">✕</button></form>
+        </li>
+      {% else %}<li class="muted">Aucune certification.</li>{% endfor %}
+      </ul>
+      <form class="form-ligne" method="post" action="{{ url_for('personnel.ajouter_certification', code=p.code) }}">
+        {{ csrf() }}
+        <input name="nom" placeholder="Certification" required style="flex:2 1 160px">
+        <input name="organisme" placeholder="Organisme">
+        <input type="date" name="date_obtention" title="Date d'obtention">
+        <input type="date" name="date_expiration" title="Date d'expiration">
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+    </section>
+
+    <section class="carte">
+      <h2>Historique</h2>
+      <ul class="liste-simple historique">
+      {% for e in historique %}
+        <li><strong>{{ actions.get(e.action, e.action) }}</strong> <span class="muted">· {{ e.horodatage|date_fr }} UTC · {{ e.utilisateur.nom if e.utilisateur else '—' }}</span>
+          {% if e.details %}<div class="details">{{ e.details }}</div>{% endif %}</li>
+      {% else %}<li class="muted">Aucun événement.</li>{% endfor %}
+      </ul>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Créée le {{ p.cree_le|date_fr }} par {{ p.cree_par.nom if p.cree_par else '—' }}{% if p.modifie_par %} · dernière modification par {{ p.modifie_par.nom }}{% endif %}</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

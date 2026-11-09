@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import niveau, code %}
+{% block titre %}Personnel{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <h1>Référentiel du personnel</h1>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('personnel.export_csv', **request.args) }}">Exporter (CSV)</a>
+    <a class="btn btn-primaire" href="{{ url_for('personnel.nouveau') }}">+ Nouvelle personne</a>
+  </div>
+</div>
+
+<div class="indicateurs" style="grid-template-columns: repeat(6, 1fr)">
+  <a class="indicateur" href="{{ url_for('personnel.liste') }}"><div class="valeur">{{ stats.total }}</div><div class="libelle">Personnes actives</div></a>
+  <a class="indicateur" href="{{ url_for('personnel.liste', disponibilite='disponible') }}"><div class="valeur">{{ stats.disponibles }}</div><div class="libelle">Disponibles</div></a>
+  <a class="indicateur" href="{{ url_for('personnel.liste', disponibilite='en_mission') }}"><div class="valeur">{{ stats.en_mission }}</div><div class="libelle">En mission</div></a>
+  <a class="indicateur {{ 'alerte' if stats.bientot }}" href="{{ url_for('personnel.liste', disponibilite='bientot') }}"><div class="valeur">{{ stats.bientot }}</div><div class="libelle">Libres sous 30 jours</div></a>
+  <a class="indicateur {{ 'alerte' if stats.cdd }}" href="{{ url_for('personnel.liste', contrat='alerte') }}"><div class="valeur">{{ stats.cdd }}</div><div class="libelle">CDD échus ou à échéance</div></a>
+  <a class="indicateur {{ 'alerte' if stats.pieces }}" href="{{ url_for('personnel.liste', piece='alerte') }}"><div class="valeur">{{ stats.pieces }}</div><div class="libelle">Pièces expirées ou à renouveler</div></a>
+</div>
+
+<form class="filtres" method="get">
+  <input type="search" name="q" value="{{ request.args.q or '' }}" placeholder="Nom, code MEP, e-mail, ville ou compétence…">
+  <select name="categorie" onchange="this.form.submit()">
+    <option value="">Toutes catégories</option>
+    {% for k, v in categories.items() %}<option value="{{ k }}" {{ 'selected' if request.args.categorie == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="disponibilite" onchange="this.form.submit()">
+    <option value="">Toute disponibilité</option>
+    {% for k, v in disponibilites.items() %}<option value="{{ k }}" {{ 'selected' if request.args.disponibilite == k }}>{{ v }}</option>{% endfor %}
+    <option value="bientot" {{ 'selected' if request.args.disponibilite == 'bientot' }}>Libre sous 30 jours</option>
+  </select>
+  <select name="competence" onchange="this.form.submit()">
+    <option value="">Toute compétence</option>
+    {% for c in competences %}<option value="{{ c.id }}" {{ 'selected' if request.args.competence == c.id|string }}>{{ c.nom }}</option>{% endfor %}
+  </select>
+  {% if request.args.competence %}
+  <select name="niveau_min" onchange="this.form.submit()">
+    {% for n, lib in niveaux.items() %}<option value="{{ n }}" {{ 'selected' if request.args.niveau_min == n|string }}>Niveau ≥ {{ n }} ({{ lib }})</option>{% endfor %}
+  </select>
+  {% endif %}
+  <select name="contrat" onchange="this.form.submit()">
+    <option value="">Tous contrats</option>
+    <option value="cdi" {{ 'selected' if request.args.contrat == 'cdi' }}>CDI uniquement</option>
+    <option value="cdd" {{ 'selected' if request.args.contrat == 'cdd' }}>CDD uniquement</option>
+    <option value="alerte" {{ 'selected' if request.args.contrat == 'alerte' }}>CDD à échéance</option>
+  </select>
+  {% if request.args.piece %}<input type="hidden" name="piece" value="{{ request.args.piece }}">{% endif %}
+  <label class="case"><input type="checkbox" name="archives" value="1" {{ 'checked' if request.args.archives }} onchange="this.form.submit()"> Inclure les archivés</label>
+  <button class="btn" type="submit">Rechercher</button>
+  {% if filtres_actifs %}<a href="{{ url_for('personnel.liste') }}" class="muted">Réinitialiser</a>{% endif %}
+</form>
+
+<div class="tableau">
+<table class="donnees">
+  <thead><tr>
+    <th>Code</th><th>Nom</th><th>Catégorie</th><th>Contrat</th><th>Compétences principales</th><th>Disponibilité</th><th>Alertes</th>
+  </tr></thead>
+  <tbody>
+  {% for p in personnes %}
+    {% set badge = p.badge_disponibilite %}
+    <tr class="{{ 'archive' if p.archive }}">
+      <td>{{ code(p) }}</td>
+      <td class="nom-cell"><a href="{{ url_for('personnel.fiche', code=p.code) }}"><strong>{{ p.nom_complet }}</strong></a><br><span class="muted">{{ p.email }}</span></td>
+      <td>{{ p.categorie_libelle }}</td>
+      <td>{{ p.contrat_libelle }}{% if p.est_cdd and p.date_fin_contrat %}<br><span class="muted">→ {{ p.date_fin_contrat|date_fr }}</span>{% endif %}</td>
+      <td>{% for pc in p.competences_principales %}<span class="tag">{{ pc.competence.nom }} <b>{{ pc.niveau }}</b></span>{% else %}<span class="muted">—</span>{% endfor %}</td>
+      <td><span class="badge {{ badge[1] }}">{{ badge[0] }}</span></td>
+      <td>
+        {% if p.etat_contrat == 'echu' %}<span class="badge badge-rouge">CDD échu</span><br>
+        {% elif p.etat_contrat == 'bientot' %}<span class="badge badge-orange">Fin CDD {{ p.date_fin_contrat|date_fr }}</span><br>{% endif %}
+        {% if p.etat_piece == 'expiree' %}<span class="badge badge-rouge">Pièce expirée</span>
+        {% elif p.etat_piece == 'bientot' %}<span class="badge badge-orange">Pièce : {{ p.piece_date_expiration|date_fr }}</span>
+        {% elif not p.etat_contrat and not p.salaire_manquant %}<span class="muted">—</span>{% endif %}
+        {% if p.salaire_manquant %}<br><span class="badge badge-orange">Salaire à renseigner</span>{% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="vide">
+      {% if filtres_actifs %}Aucune personne ne correspond à ces critères.
+      {% else %}Aucune personne enregistrée pour l'instant. <a href="{{ url_for('personnel.nouveau') }}">Enregistrer la première</a>.{% endif %}
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px">{{ personnes|length }} résultat{{ 's' if personnes|length > 1 }}</p>
+{% endblock %}

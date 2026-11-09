@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}{{ 'Modifier ' ~ client.code if client else 'Nouveau client' }}{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <div>
+    <a href="{{ url_for('clients.fiche', code=client.code) if client else url_for('clients.liste') }}" class="muted">← Retour</a>
+    <h1>{% if client %}Modifier {{ client.raison_sociale }} <span class="code code-client">{{ client.code }}</span>{% else %}Nouveau client{% endif %}</h1>
+  </div>
+</div>
+
+<form method="post" class="formulaire" novalidate>
+  {{ form.hidden_tag() }}
+  <section class="section-form">
+    <h2>Identification</h2>
+    {% if client %}
+      <div class="encart">Code <strong class="mono">{{ client.code }}</strong> <span class="verrou">— attribué par le système, non modifiable.</span></div>
+    {% else %}
+      <div class="encart">Le code client (CLI0001, CLI0002…) sera généré à l'enregistrement. Les interlocuteurs s'ajoutent ensuite depuis la fiche.</div>
+    {% endif %}
+    <div class="grille">
+      {{ champ(form.raison_sociale, classe="large", requis=True) }}
+      {{ champ(form.sigle) }}
+      {{ champ(form.secteur, requis=True) }}
+      {{ champ(form.statut, requis=True) }}
+      {{ champ(form.site_web, placeholder="https://…") }}
+      {{ champ(form.telephone) }}
+      {{ champ(form.adresse, classe="large") }}
+      {{ champ(form.ville) }}
+      {{ champ(form.pays, placeholder="Cameroun") }}
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Informations légales et facturation</h2>
+    <div class="grille">
+      {{ champ(form.rccm, aide="Doit être unique s'il est renseigné.") }}
+      {{ champ(form.niu) }}
+      {{ champ(form.delai_paiement, requis=True, min=0, max=365) }}
+      {{ champ(form.email_facturation, type="email") }}
+      {{ champ(form.adresse_facturation, classe="large", rows=3, placeholder="Si différente de l'adresse du siège") }}
+    </div>
+  </section>
+
+  <div class="pied-form">
+    <a class="btn" href="{{ url_for('clients.fiche', code=client.code) if client else url_for('clients.liste') }}">Annuler</a>
+    <button class="btn btn-primaire" type="submit">{{ 'Enregistrer les modifications' if client else 'Enregistrer et générer le code' }}</button>
+  </div>
+</form>
+{% endblock %}

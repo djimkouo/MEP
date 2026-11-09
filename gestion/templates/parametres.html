@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Paramètres{% endblock %}
+{% block contenu %}
+<div class="titre-page"><h1>Paramètres</h1></div>
+<form method="post" class="section-form" style="max-width:620px" novalidate>
+  {{ form.hidden_tag() }}
+  <h2>Calcul des marges</h2>
+  {{ champ(form.jours_ouvres_mois, requis=True, step="0.01", min=1, max=31,
+           aide="Sert à estimer le coût journalier d'un salarié : salaire mensuel brut ÷ ce nombre. Valeur courante : 21,67 (260 jours par an ÷ 12). Les charges patronales ne sont pas incluses.") }}
+  <div class="pied-form" style="margin-top:16px">
+    <button class="btn btn-primaire" type="submit">Enregistrer</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block titre %}Missions{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <h1>Missions</h1>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('missions.export_csv', **request.args) }}">Exporter (CSV)</a>
+    <a class="btn btn-primaire" href="{{ url_for('missions.nouvelle') }}">+ Nouvelle mission</a>
+  </div>
+</div>
+
+<div class="indicateurs" style="grid-template-columns: repeat(4, 1fr)">
+  <a class="indicateur" href="{{ url_for('missions.liste', statut='en_cours') }}"><div class="valeur">{{ stats.en_cours }}</div><div class="libelle">En cours</div></a>
+  <a class="indicateur" href="{{ url_for('missions.liste', statut='preparation') }}"><div class="valeur">{{ stats.preparation }}</div><div class="libelle">En préparation</div></a>
+  <a class="indicateur {{ 'alerte' if stats.bientot }}" href="{{ url_for('missions.liste', alerte='bientot') }}"><div class="valeur">{{ stats.bientot }}</div><div class="libelle">Se terminent sous 30 jours</div></a>
+  <a class="indicateur {{ 'alerte' if stats.depassee }}" href="{{ url_for('missions.liste', alerte='depassee') }}"><div class="valeur">{{ stats.depassee }}</div><div class="libelle">Date de fin dépassée, à clôturer</div></a>
+</div>
+
+<form class="filtres" method="get">
+  <input type="search" name="q" value="{{ request.args.q or '' }}" placeholder="Code, intitulé, client, personne ou référence…">
+  <select name="statut" onchange="this.form.submit()">
+    <option value="">En préparation et en cours</option>
+    {% for k, v in statuts.items() %}<option value="{{ k }}" {{ 'selected' if request.args.statut == k }}>{{ v }}</option>{% endfor %}
+    <option value="toutes" {{ 'selected' if request.args.statut == 'toutes' }}>Toutes</option>
+  </select>
+  <select name="client" onchange="this.form.submit()">
+    <option value="">Tous clients</option>
+    {% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if request.args.client == c.id|string }}>{{ c.raison_sociale }}</option>{% endfor %}
+  </select>
+  <select name="personne" onchange="this.form.submit()">
+    <option value="">Toutes personnes</option>
+    {% for p in personnes %}<option value="{{ p.id }}" {{ 'selected' if request.args.personne == p.id|string }}>{{ p.nom_complet }}</option>{% endfor %}
+  </select>
+  {% if request.args.alerte %}<input type="hidden" name="alerte" value="{{ request.args.alerte }}">{% endif %}
+  <button class="btn" type="submit">Rechercher</button>
+  {% if filtres_actifs %}<a href="{{ url_for('missions.liste') }}" class="muted">Réinitialiser</a>{% endif %}
+</form>
+
+<div class="tableau">
+<table class="donnees">
+  <thead><tr><th>Code</th><th>Mission</th><th>Personnes</th><th>Période</th><th class="num">Prix</th><th>Échéance</th><th>Statut</th></tr></thead>
+  <tbody>
+  {% for m in missions %}
+    {% set tjms = m.affectations|map(attribute='tjm_vente')|list %}
+    <tr class="{{ 'archive' if m.statut in ('terminee', 'annulee') }}">
+      <td><span class="code code-mission">{{ m.code }}</span></td>
+      <td class="nom-cell"><a href="{{ url_for('missions.fiche', code=m.code) }}"><strong>{{ m.intitule }}</strong></a><br><span class="muted">{{ m.client.raison_sociale }}</span></td>
+      <td>{% for p in m.personnes %}<span class="tag">{{ p.nom_complet }}</span>{% else %}<span class="muted">À affecter</span>{% endfor %}</td>
+      <td style="white-space:nowrap">{{ m.date_debut|date_fr }}<br><span class="muted">→ {{ m.date_fin|date_fr }}</span></td>
+      <td class="num">{% if m.est_forfait %}{{ m.montant_forfait|xaf }}<br><span class="muted">forfait</span>
+        {% elif tjms %}{{ tjms|min|xaf }}{% if tjms|min != tjms|max %}<br><span class="muted">à {{ tjms|max|xaf }}</span>{% else %}<br><span class="muted">TJM</span>{% endif %}{% else %}—{% endif %}</td>
+      <td>
+        {% if m.alerte_fin == 'depassee' %}<span class="badge badge-rouge">À clôturer</span>
+        {% elif m.alerte_fin == 'bientot' %}<span class="badge badge-orange">J-{{ m.jours_restants }}</span>
+        {% elif m.statut in ('preparation', 'en_cours') %}<span class="muted">{{ m.jours_restants }} j</span>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td><span class="badge {{ m.badge_statut }}">{{ m.statut_libelle }}</span></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="vide">
+      {% if filtres_actifs %}Aucune mission ne correspond à ces critères.
+      {% else %}Aucune mission en cours ou en préparation. <a href="{{ url_for('missions.nouvelle') }}">Créer une mission</a>.{% endif %}
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted" style="margin-top:10px">{{ missions|length }} résultat{{ 's' if missions|length > 1 }}</p>
+{% endblock %}

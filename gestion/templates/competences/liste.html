@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}Compétences{% endblock %}
+{% block contenu %}
+<div class="titre-page"><h1>Référentiel des compétences</h1></div>
+<p class="muted" style="margin-top:-10px">Liste commune à tout le personnel. Les doublons sont bloqués sans tenir compte des majuscules ni des espaces.</p>
+
+<form method="post" class="carte form-ligne" style="align-items:flex-end;margin-bottom:16px" novalidate>
+  {{ form.hidden_tag() }}
+  <div style="flex:2 1 220px">{{ champ(form.nom, placeholder="ex. ISO 20022") }}</div>
+  <div>{{ champ(form.categorie) }}</div>
+  <button class="btn btn-primaire" type="submit">Ajouter</button>
+</form>
+
+<div class="groupes">
+{% for cat, libelle in categories.items() %}
+  <section class="carte">
+    <h2>{{ libelle }} <span class="muted">({{ groupes[cat]|length }})</span></h2>
+    <ul class="liste-simple">
+    {% for c in groupes[cat] %}
+      <li>
+        <span>{{ c.nom }} {% if not c.actif %}<span class="badge badge-gris">Inactive</span>{% endif %}
+          <span class="muted">· {{ c.personnes|length }} personne{{ 's' if c.personnes|length > 1 }}</span></span>
+        <a class="btn btn-petit" href="{{ url_for('competences.modifier', cid=c.id) }}">Modifier</a>
+      </li>
+    {% else %}<li class="muted">Aucune compétence.</li>{% endfor %}
+    </ul>
+  </section>
+{% endfor %}
+</div>
+{% endblock %}

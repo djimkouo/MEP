@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}{{ 'Modifier ' ~ mission.code if mission else 'Nouvelle mission' }}{% endblock %}
+{% block contenu %}
+<div class="titre-page">
+  <div>
+    <a href="{{ url_for('missions.fiche', code=mission.code) if mission else url_for('missions.liste') }}" class="muted">← Retour</a>
+    <h1>{% if mission %}Modifier {{ mission.intitule }} <span class="code code-mission">{{ mission.code }}</span>{% else %}Nouvelle mission{% endif %}</h1>
+  </div>
+</div>
+
+<form method="post" class="formulaire" novalidate>
+  {{ form.hidden_tag() }}
+  <section class="section-form">
+    <h2>Client et mission</h2>
+    {% if not mission %}
+      <div class="encart">Le code mission (MIS0001, MIS0002…) sera généré à l'enregistrement. La mission est créée « en préparation » ; les personnes s'affectent ensuite depuis la fiche.</div>
+    {% endif %}
+    <div class="grille">
+      {{ champ(form.client_id, requis=True) }}
+      {{ champ(form.contact_id) }}
+      {{ champ(form.reference_commande) }}
+      {{ champ(form.intitule, classe="large", requis=True, placeholder="ex. Révision générale de la ligne de production n° 1") }}
+      {{ champ(form.mode) }}
+      {{ champ(form.lieu, placeholder="ex. Douala, siège du client") }}
+      {{ champ(form.description, classe="large", rows=3) }}
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Facturation</h2>
+    {% if mission and mission.affectations %}<div class="encart">Des personnes sont affectées : le mode de facturation ne peut plus changer.</div>{% endif %}
+    <div class="grille">
+      {{ champ(form.mode_facturation, requis=True, aide="Forfait : montant fixe pour un résultat, facturé par jalons. Régie : mise à disposition de personnel, facturée au prix par jour × jours travaillés.") }}
+      <div data-forfait>{{ champ(form.montant_forfait, requis=True, min=1, step=1, placeholder="ex. 45000000") }}</div>
+      <div></div>
+      <div data-forfait class="large">{{ champ(form.livrable, requis=True, rows=3, placeholder="ex. Installation et mise en service de la ligne d'embouteillage n° 2, réception par le client") }}</div>
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Dates et volume</h2>
+    <div class="grille">
+      {{ champ(form.date_debut, requis=True) }}
+      {{ champ(form.duree_jours, requis=True, min=1, aide="Calculée à partir des dates (début et fin inclus). Si vous la modifiez, la date de fin s'ajuste.") }}
+      {{ champ(form.date_fin, requis=True) }}
+      {{ champ(form.jours_vendus, min=1, aide="Régie : jours achetés par le client. Forfait : jours que vous estimez nécessaires (budget). Facultatif.") }}
+    </div>
+  </section>
+
+  <section class="section-form">
+    <h2>Compétences recherchées</h2>
+    <p class="muted" style="margin:-6px 0 10px">Elles servent à proposer en premier les personnes qui les possèdent lors de l'affectation.</p>
+    {% if competences %}
+    <div class="competences-choix">
+      {% for c in competences %}
+        <label><input type="checkbox" name="competences" value="{{ c.id }}" {{ 'checked' if c.id in choisies }}> {{ c.nom }}</label>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">Aucune compétence dans le référentiel. <a href="{{ url_for('competences.liste') }}">En ajouter</a>.</p>{% endif %}
+  </section>
+
+  <div class="pied-form">
+    <a class="btn" href="{{ url_for('missions.fiche', code=mission.code) if mission else url_for('missions.liste') }}">Annuler</a>
+    <button class="btn btn-primaire" type="submit">{{ 'Enregistrer les modifications' if mission else 'Créer la mission' }}</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Ne propose que les interlocuteurs actifs du client choisi.
+  const carte = {{ carte|tojson }};
+  const client = document.getElementById('client_id');
+  const contact = document.getElementById('contact_id');
+  const initial = contact.value;
+  function majContacts(premierChargement) {
+    const liste = carte[client.value] || [];
+    contact.innerHTML = '<option value="">— Aucun —</option>' +
+      liste.map(c => `<option value="${c.id}">${c.nom.replace(/</g, '&lt;')}${c.principal ? ' (principal)' : ''}</option>`).join('');
+    if (premierChargement && liste.some(c => String(c.id) === initial)) contact.value = initial;
+    else { const p = liste.find(c => c.principal); if (p && !premierChargement) contact.value = p.id; }
+  }
+  client.addEventListener('change', () => majContacts(false));
+  majContacts(true);
+
+  // Durée ⇄ date de fin : durée = fin − début + 1 ; modifier la durée recalcule la fin.
+  const dDebut = document.getElementById('date_debut');
+  const dFin = document.getElementById('date_fin');
+  const duree = document.getElementById('duree_jours');
+  const JOUR = 86400000;
+  const versDate = v => v ? new Date(v + 'T00:00:00Z') : null;
+  const versIso = d => d.toISOString().slice(0, 10);
+  function dureeDepuisDates() {
+    const a = versDate(dDebut.value), b = versDate(dFin.value);
+    if (a && b && b >= a) duree.value = Math.round((b - a) / JOUR) + 1;
+  }
+  function finDepuisDuree() {
+    const a = versDate(dDebut.value), n = parseInt(duree.value, 10);
+    if (a && n >= 1) dFin.value = versIso(new Date(a.getTime() + (n - 1) * JOUR));
+  }
+  dFin.addEventListener('change', dureeDepuisDates);
+  duree.addEventListener('input', finDepuisDuree);
+  dDebut.addEventListener('change', () => { duree.value ? finDepuisDuree() : dureeDepuisDates(); });
+  if (!duree.value) dureeDepuisDates();
+
+  // Champs du forfait
+  const mode = document.getElementById('mode_facturation');
+  function majMode() { document.querySelectorAll('[data-forfait]').forEach(el => el.hidden = mode.value !== 'forfait'); }
+  mode.addEventListener('change', majMode); majMode();
+</script>
+{% endblock %}

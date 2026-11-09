@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titre %}Prolonger {{ m.code }}{% endblock %}
+{% block contenu %}
+<a href="{{ url_for('missions.fiche', code=m.code) }}" class="muted">← {{ m.code }} · {{ m.intitule }}</a>
+<h1 style="margin:6px 0 6px">Prolonger la mission</h1>
+<p class="muted" style="margin:0 0 18px">Fin actuelle : <strong>{{ m.date_fin|date_fr }}</strong>. Chaque personne prolongée reçoit une nouvelle période à partir du lendemain de sa fin actuelle ; l'ancienne période et son TJM restent dans l'historique.</p>
+
+{% for e in erreurs %}<div class="flash flash-danger">{{ e }}</div>{% endfor %}
+
+<form method="post" class="section-form" style="max-width:820px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="grille-2" style="max-width:520px">
+    <div class="champ"><label for="date_fin">Nouvelle date de fin <span class="req">*</span></label>
+      <input type="date" id="date_fin" name="date_fin" required min="{{ m.date_fin.isoformat() }}" value="{{ request.form.date_fin or proposition.isoformat() }}"></div>
+    <div class="champ"><label for="jours_vendus_sup">{{ 'Jours budgétés supplémentaires' if m.est_forfait else 'Jours vendus supplémentaires' }}</label>
+      <input type="number" id="jours_vendus_sup" name="jours_vendus_sup" min="1" value="{{ request.form.jours_vendus_sup or '' }}"></div>
+    {% if m.est_forfait %}
+    <div class="champ"><label for="montant_sup">Avenant : montant supplémentaire (XAF)</label>
+      <input type="number" id="montant_sup" name="montant_sup" min="1" step="1" value="{{ request.form.montant_sup or '' }}">
+      <div class="aide">Facultatif. Forfait actuel : {{ m.montant_forfait|xaf }}. Pensez à ajouter le jalon correspondant.</div></div>
+    {% endif %}
+  </div>
+
+  <h2 style="margin-top:22px">Personnes à prolonger</h2>
+  {% if candidates %}
+  <div class="tableau">
+  <table class="donnees compact">
+    <thead><tr><th style="width:40px"></th><th>Personne</th><th>Période actuelle</th>{% if not m.est_forfait %}<th class="num">TJM actuel</th><th>Nouveau TJM (XAF)</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for a in candidates %}
+      <tr>
+        <td><input type="checkbox" name="prolonger_{{ a.id }}" value="1" {{ 'checked' if request.method == 'GET' or request.form.get('prolonger_' ~ a.id) }}></td>
+        <td>{{ a.personne.nom_complet }} <span class="muted">({{ a.personne.code }})</span></td>
+        <td>{{ a.date_debut|date_fr }} → {{ a.date_fin|date_fr }}</td>
+        {% if not m.est_forfait %}<td class="num">{{ a.tjm_vente|xaf }}</td>
+        <td><input type="number" name="tjm_{{ a.id }}" min="1" step="1" value="{{ request.form.get('tjm_' ~ a.id) or a.tjm_vente }}" style="width:160px;padding:6px 8px;border:1px solid #d3d8df;border-radius:6px"></td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="muted">Aucune affectation ne va jusqu'à la fin de la mission : seule la date de fin de la mission sera repoussée.</p>
+  {% endif %}
+
+  <div class="pied-form" style="margin-top:16px">
+    <a class="btn" href="{{ url_for('missions.fiche', code=m.code) }}">Annuler</a>
+    <button class="btn btn-primaire" type="submit">Prolonger</button>
+  </div>
+</form>
+{% endblock %}

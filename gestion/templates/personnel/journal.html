@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import code %}
+{% block titre %}Journal d'audit{% endblock %}
+{% block contenu %}
+<div class="titre-page"><h1>Journal d'audit</h1></div>
+<form class="filtres" method="get">
+  <select name="action" onchange="this.form.submit()">
+    <option value="">Toutes les actions</option>
+    {% for k, v in actions.items() %}<option value="{{ k }}" {{ 'selected' if action == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  <span class="muted">300 dernières entrées · heures en UTC</span>
+</form>
+<div class="tableau">
+<table class="donnees">
+  <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Concerne</th><th>Détails</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for e in entrees %}
+    <tr>
+      <td style="white-space:nowrap">{{ e.horodatage|date_fr }}</td>
+      <td>{{ e.utilisateur.nom if e.utilisateur else '—' }}</td>
+      <td><span class="badge {{ 'badge-orange' if e.action == 'consultation_sensible' else 'badge-gris' }}">{{ actions.get(e.action, e.action) }}</span></td>
+      <td>{% if e.personne %}<a href="{{ url_for('personnel.fiche', code=e.personne.code) }}">{{ code(e.personne) }}</a> {{ e.personne.nom_complet }}
+        {% elif e.mission %}<a class="code code-mission" href="{{ url_for('missions.fiche', code=e.mission.code) }}">{{ e.mission.code }}</a> {{ e.mission.intitule }}
+        {% elif e.client %}<a class="code code-client" href="{{ url_for('clients.fiche', code=e.client.code) }}">{{ e.client.code }}</a> {{ e.client.raison_sociale }}
+        {% else %}—{% endif %}</td>
+      <td style="white-space:pre-wrap;font-size:12.5px">{{ e.details or '' }}</td>
+      <td class="muted mono" style="font-size:12px">{{ e.adresse_ip or '' }}</td>
+    </tr>
+  {% else %}<tr><td colspan="6" class="vide">Aucune entrée.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

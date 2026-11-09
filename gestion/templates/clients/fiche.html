@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% from "_macros.html" import champ %}
+{% block titre %}{{ c.code }} · {{ c.raison_sociale }}{% endblock %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% block contenu %}
+<a href="{{ url_for('clients.liste') }}" class="muted">← Clients</a>
+<div class="fiche-entete" style="margin-top:8px">
+  <div class="avatar avatar-client">{{ (c.sigle or c.raison_sociale)[:2]|upper }}</div>
+  <div>
+    <h1>{{ c.raison_sociale }}</h1>
+    <div class="meta">
+      <span class="code code-client">{{ c.code }}</span>{% if c.sigle %} · {{ c.sigle }}{% endif %} · {{ c.secteur_libelle }}
+      <span class="badge {{ c.badge_statut }}">{{ c.statut_libelle }}</span>
+    </div>
+  </div>
+  <div class="actions">
+    {% if c.statut == 'prospect' %}
+      <form method="post" action="{{ url_for('clients.changer_statut', code=c.code) }}">{{ csrf() }}<input type="hidden" name="statut" value="actif"><button class="btn" type="submit">Passer en client actif</button></form>
+    {% endif %}
+    {% if c.statut == 'inactif' %}
+      <form method="post" action="{{ url_for('clients.changer_statut', code=c.code) }}">{{ csrf() }}<input type="hidden" name="statut" value="actif"><button class="btn" type="submit">Réactiver</button></form>
+    {% else %}
+      <form method="post" action="{{ url_for('clients.changer_statut', code=c.code) }}" onsubmit="return confirm('Passer ce client en inactif ?')">{{ csrf() }}<input type="hidden" name="statut" value="inactif"><button class="btn btn-danger" type="submit">Désactiver</button></form>
+    {% endif %}
+    <a class="btn btn-primaire" href="{{ url_for('clients.modifier', code=c.code) }}">Modifier</a>
+  </div>
+</div>
+
+<div class="colonnes">
+  <div class="colonne">
+    <section class="carte">
+      <h2>Identification</h2>
+      <dl class="infos">
+        <dt>Secteur</dt><dd>{{ c.secteur_libelle }}</dd>
+        <dt>Téléphone</dt><dd>{{ c.telephone or '—' }}</dd>
+        <dt>Site web</dt><dd>{% if c.site_web %}<a href="{{ c.site_web }}" target="_blank" rel="noopener">{{ c.site_web }}</a>{% else %}—{% endif %}</dd>
+        <dt>Adresse</dt><dd>{{ c.adresse or '—' }}</dd>
+        <dt>Ville / pays</dt><dd>{{ c.ville or '—' }}{% if c.pays %}, {{ c.pays }}{% endif %}</dd>
+      </dl>
+    </section>
+
+    <section class="carte">
+      <h2>Légal et facturation</h2>
+      <dl class="infos">
+        <dt>RCCM</dt><dd class="mono">{{ c.rccm or '—' }}</dd>
+        <dt>NIU</dt><dd class="mono">{{ c.niu or '—' }}</dd>
+        <dt>Délai de paiement</dt><dd>{{ c.delai_paiement }} jours</dd>
+        <dt>E-mail factures</dt><dd>{% if c.email_facturation %}<a href="mailto:{{ c.email_facturation }}">{{ c.email_facturation }}</a>{% else %}—{% endif %}</dd>
+        <dt>Adresse de facturation</dt><dd style="white-space:pre-wrap">{{ c.adresse_facturation or 'Identique au siège' }}</dd>
+      </dl>
+    </section>
+
+    <section class="carte" id="missions">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">
+        <span>Missions <span class="muted">({{ c.missions|length }})</span></span>
+        {% if c.statut != 'inactif' %}<a class="btn btn-petit" href="{{ url_for('missions.nouvelle', client=c.code) }}">+ Nouvelle mission</a>{% endif %}
+      </h2>
+      <ul class="liste-simple">
+      {% for m in c.missions %}
+        <li>
+          <span><a class="code code-mission" href="{{ url_for('missions.fiche', code=m.code) }}">{{ m.code }}</a> <strong>{{ m.intitule }}</strong><br>
+            <span class="muted">{{ m.date_debut|date_fr }} → {{ m.date_fin|date_fr }} · {{ m.personnes|map(attribute='nom_complet')|join(', ') or 'aucune personne affectée' }}</span></span>
+          <span class="badge {{ m.badge_statut }}">{{ m.statut_libelle }}</span>
+        </li>
+      {% else %}<li class="muted">Aucune mission pour ce client.</li>{% endfor %}
+      </ul>
+    </section>
+
+    <section class="carte" id="notes">
+      <h2>Notes internes</h2>
+      <form method="post" action="{{ url_for('clients.ajouter_note', code=c.code) }}">
+        {{ note_form.hidden_tag() }}
+        {{ note_form.texte(style="width:100%;padding:8px 10px;border:1px solid #d3d8df;border-radius:6px;font:inherit", placeholder="Compte rendu de réunion, besoin exprimé, relance…") }}
+        <div style="text-align:right;margin-top:8px"><button class="btn" type="submit">Ajouter la note</button></div>
+      </form>
+      {% for n in c.notes %}
+        <div class="note"><div class="qui">{{ n.cree_le|date_fr }} · {{ n.auteur.nom if n.auteur else '—' }}</div><p>{{ n.texte }}</p></div>
+      {% else %}<p class="muted">Aucune note.</p>{% endfor %}
+    </section>
+  </div>
+
+  <div class="colonne">
+    <section class="carte" id="contacts">
+      <h2>Interlocuteurs <span class="muted">({{ c.contacts_actifs|length }})</span></h2>
+      {% for ct in c.contacts %}
+        <div class="contact {{ 'inactif' if not ct.actif }}">
+          <div>
+            <strong>{{ ct.nom_complet }}</strong>
+            {% if ct.principal %}<span class="badge badge-accent">Principal</span>{% endif %}
+            <span class="badge badge-gris">{{ ct.role_libelle }}</span>
+            {% if not ct.actif %}<span class="badge badge-gris">Inactif</span>{% endif %}
+            <div class="coord">{{ ct.fonction or '' }}</div>
+            <div class="coord">
+              {% if ct.email %}<a href="mailto:{{ ct.email }}">{{ ct.email }}</a>{% endif %}
+              {% if ct.email and ct.telephone %} · {% endif %}{{ ct.telephone or '' }}
+            </div>
+          </div>
+          <div class="boutons">
+            {% if ct.actif and not ct.principal %}
+              <form method="post" action="{{ url_for('clients.definir_principal', code=c.code, cid=ct.id) }}">{{ csrf() }}<button class="btn btn-petit" type="submit" title="Définir comme contact principal">★</button></form>
+            {% endif %}
+            <a class="btn btn-petit" href="{{ url_for('clients.modifier_contact', code=c.code, cid=ct.id) }}">Modifier</a>
+            <form method="post" action="{{ url_for('clients.basculer_contact', code=c.code, cid=ct.id) }}">{{ csrf() }}<button class="btn btn-petit" type="submit">{{ 'Réactiver' if not ct.actif else 'Désactiver' }}</button></form>
+          </div>
+        </div>
+      {% else %}<p class="muted">Aucun interlocuteur enregistré.</p>{% endfor %}
+
+      <details class="ajout" {{ 'open' if not c.contacts }}>
+        <summary>+ Ajouter un interlocuteur</summary>
+        <form method="post" action="{{ url_for('clients.ajouter_contact', code=c.code) }}" novalidate>
+          {{ contact_form.hidden_tag() }}
+          <div class="grille-2">
+            {{ champ(contact_form.prenom) }}
+            {{ champ(contact_form.nom, requis=True) }}
+            {{ champ(contact_form.fonction) }}
+            {{ champ(contact_form.role) }}
+            {{ champ(contact_form.email, type="email") }}
+            {{ champ(contact_form.telephone) }}
+          </div>
+          <div class="case-ligne" style="margin-top:12px">
+            <label>{{ contact_form.principal() }} Contact principal</label>
+            <input type="hidden" name="actif" value="y">
+            <span style="flex:1"></span>
+            <button class="btn btn-primaire" type="submit">Ajouter</button>
+          </div>
+        </form>
+      </details>
+    </section>
+
+    <section class="carte">
+      <h2>Historique</h2>
+      <ul class="liste-simple historique">
+      {% for e in historique %}
+        <li><strong>{{ actions.get(e.action, e.action) }}</strong> <span class="muted">· {{ e.horodatage|date_fr }} UTC · {{ e.utilisateur.nom if e.utilisateur else '—' }}</span>
+          {% if e.details %}<div class="details">{{ e.details }}</div>{% endif %}</li>
+      {% else %}<li class="muted">Aucun événement.</li>{% endfor %}
+      </ul>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Créé le {{ c.cree_le|date_fr }} par {{ c.cree_par.nom if c.cree_par else '—' }}{% if c.modifie_par %} · dernière modification par {{ c.modifie_par.nom }}{% endif %}</p>
+    </section>
+  </div>
+</div>
+{% endblock %}
